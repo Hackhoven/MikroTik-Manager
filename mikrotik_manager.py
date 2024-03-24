@@ -1,11 +1,15 @@
 import tkinter as tk
 from tkinter import scrolledtext, simpledialog
-import paramiko
+from netmiko import ConnectHandler
+import time
 
 class MikroTikManager:
     def __init__(self, root):
         self.root = root
         self.root.title("MikroTik RouterOS Manager")
+
+        # Initialize net_connect attribute
+        self.net_connect = None
 
         self.create_gui()
 
@@ -34,12 +38,12 @@ class MikroTikManager:
 
         # Additional buttons
         button_commands = [
-            ("Change IP", self.change_ip),
-            ("Backup Configuration", self.backup_configuration),
-            ("IP Address Info", self.ip_address_info),
-            ("Show Services and Ports", self.show_services_ports),
+            ("Change the IP address", self.change_ip),
+            ("Configuration Backup", self.backup_configuration),
+            ("IP Address Information", self.ip_address_info),
+            ("Display Services and Ports", self.show_services_ports),
             ("Ping Test", self.ping_test),
-            ("Enable/Disable Safe Mode", self.toggle_safe_mode),
+            ("Toggle Safe Mode", self.toggle_safe_mode),
             ("Interface Status", self.interface_status),
             ("Reboot", self.reboot),
             ("Change Service Port", self.change_service_port),
@@ -57,28 +61,22 @@ class MikroTikManager:
         username = simpledialog.askstring("Input", "Enter your MikroTik username:")
         password = simpledialog.askstring("Input", "Enter your MikroTik password:", show='*')
 
-        try:
-            # Create SSH client
-            ssh = paramiko.SSHClient()
-            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        device = {
+            'device_type': 'mikrotik_routeros',
+            'ip': router_ip,
+            'port': ssh_port,
+            'username': username,
+            'password': password,
+        }
 
-            # Connect to the MikroTik Router
-            ssh.connect(router_ip, port=ssh_port, username=username, password=password)
+        try:
+            # Create SSH connection
+            self.net_connect = ConnectHandler(**device)
 
             # Run a command (example: print system information)
-            stdin, stdout, stderr = ssh.exec_command("/system resource print")
-
-            # Display the output
-            output = stdout.read().decode("utf-8")
+            output = self.net_connect.send_command("/system resource print")
             self.output_text.insert(tk.END, output)
 
-            # Close the SSH connection
-            ssh.close()
-
-        except paramiko.AuthenticationException:
-            self.output_text.insert(tk.END, "Authentication failed. Please check username and password.")
-        except paramiko.SSHException as e:
-            self.output_text.insert(tk.END, f"Error during SSH connection: {str(e)}")
         except Exception as e:
             self.output_text.insert(tk.END, f"Error: {str(e)}")
 
@@ -95,11 +93,27 @@ class MikroTikManager:
         self.run_command("/ip service print")
 
     def ping_test(self):
-        host_to_ping = "8.8.8.8"  # Change to your desired host
-        self.run_command(f"/ping {host_to_ping}")
+        host_to_ping = "127.0.0.1"  # Change to your desired host
+        self.run_command(f"/ping {host_to_ping} count=4")
 
     def toggle_safe_mode(self):
-        self.run_command("/ip firewall set safe-mode=no")
+        if self.net_connect is not None:
+            try:     
+                self.net_connect.write_channel('\x18')
+                time.sleep(4)
+
+                output = self.net_connect.read_channel()
+
+                if "Safe Mode taken" in output:
+                    self.output_text.insert(tk.END, "\nSafe mode is on.")
+                else:
+                    self.output_text.insert(tk.END, "\nSafe mode is deactivated.")
+
+            except Exception as e:
+                self.output_text.insert(tk.END, f"Error occurred whilst toggling the safe mode: {str(e)}")
+
+        else:
+            self.output_text.insert(tk.END, "Firstly, connect to the router!")
 
     def interface_status(self):
         self.run_command("/interface print detail")
@@ -115,22 +129,9 @@ class MikroTikManager:
         ssh_port = self.port_entry.get()
 
         try:
-            # Create SSH client
-            ssh = paramiko.SSHClient()
-            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-
-            # Connect to the MikroTik Router
-            ssh.connect(router_ip, port=ssh_port, username="admin", password="your_password")
-
             # Run the specified command
-            stdin, stdout, stderr = ssh.exec_command(command)
-
-            # Display the output
-            output = stdout.read().decode("utf-8")
+            output = self.net_connect.send_command(command)
             self.output_text.insert(tk.END, output)
-
-            # Close the SSH connection
-            ssh.close()
 
         except Exception as e:
             self.output_text.insert(tk.END, f"Error: {str(e)}")
