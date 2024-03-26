@@ -1,3 +1,5 @@
+# Made by Hackhoven
+
 import tkinter as tk
 from tkinter import scrolledtext, simpledialog
 from netmiko import ConnectHandler
@@ -47,6 +49,11 @@ class MikroTikManager:
             ("Interface Status", self.interface_status),
             ("Reboot", self.reboot),
             ("Change Service Port", self.change_service_port),
+            ("Assign new identity", self.assign_new_identity),
+            ("Connect to the internet", self.connect_internet),
+            ("Disconnect from the internet", self.disconnect_internet),
+            ("Implement firewall rule", self.implement_firewall_rule),
+            ("Disable firewall rule", self.disable_firewall_rule),
         ]
 
         for text, command in button_commands:
@@ -81,7 +88,11 @@ class MikroTikManager:
             self.output_text.insert(tk.END, f"Error: {str(e)}")
 
     def change_ip(self):
-        self.run_command("/interface ethernet set [find name=ether1] address=")
+        interface = simpledialog.askstring("Choose Interface", "Interface Name: ")
+
+        if interface:
+            new_ip = simpledialog.askstring("New IP Adrs", f"New IP Adrs for: {interface}:")
+            self.run_command(f"ip address set [find interface={interface}] address={new_ip}")
 
     def backup_configuration(self):
         self.run_command("/system backup save name=config_backup")
@@ -93,8 +104,12 @@ class MikroTikManager:
         self.run_command("/ip service print")
 
     def ping_test(self):
-        host_to_ping = "127.0.0.1"  # Change to your desired host
-        self.run_command(f"/ping {host_to_ping} count=4")
+        host_to_ping =  simpledialog.askstring("Destination IP", "Destination IP:")
+
+        if host_to_ping is not None:
+            self.run_command(f"/ping {host_to_ping} count=4")
+        else:
+            self.display_output("Enter a destination IP address to ping.")
 
     def toggle_safe_mode(self):
         if self.net_connect is not None:
@@ -122,7 +137,28 @@ class MikroTikManager:
         self.run_command("/system reboot")
 
     def change_service_port(self):
-        self.run_command("/ip service set telnet port=8888")
+        self.run_command("/ip service set telnet port=8888") 
+
+    def assign_new_identity(self):
+        newID = simpledialog.askstring("New ID", "New ID: ")
+        self.run_command(f"/system identity set name={newID}")
+
+    def connect_internet(self):
+        self.run_command("/interface ethernet enable [find]")
+    
+    def disconnect_internet(self):
+        self.run_command("/interface ethernet disable [find]")
+
+    def implement_firewall_rule(self):
+        ruleNo = simpledialog.askstring("Implementing firewall Rule", "Rule number: ")
+        self.run_command(f"/ip firewall enable {ruleNo}")
+
+    def disable_firewall_rule(self):
+        ruleNo = simpledialog.askstring("Disabling firewall Rule", "Rule number: ")
+        ruleNo = self.entry_firewall_rule.get()
+
+        self.run_command(f"/ip firewall disable {ruleNo}")
+
 
     def run_command(self, command):
         router_ip = self.ip_entry.get()
